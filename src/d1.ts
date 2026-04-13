@@ -63,5 +63,10 @@ export class D1Client {
     if (!response.ok) {
       throw new Error(`D1 batch error: ${response.status} ${response.statusText}`);
     }
+
+    const data = (await response.json()) as D1Response;
+    if (!data.success) {
+      throw new Error(`D1 batch failed: ${JSON.stringify(data)}`);
+    }
   }
 }

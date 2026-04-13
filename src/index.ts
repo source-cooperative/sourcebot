@@ -46,7 +46,11 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
   const now = new Date().toISOString();
 
   // Record run start
-  await deps.d1.execute("INSERT INTO runs (started_at, status) VALUES (?, 'running')", [now]);
+  const runRows = await deps.d1.query<{ id: number }>(
+    "INSERT INTO runs (started_at, status) VALUES (?, 'running') RETURNING id",
+    [now]
+  );
+  const runId = runRows[0]?.id;
 
   let errorsFound = 0;
   let issuesCreated = 0;
@@ -65,8 +69,8 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
 
     if (allErrors.length === 0) {
       await deps.d1.execute(
-        "UPDATE runs SET completed_at = ?, status = 'completed', errors_found = 0 WHERE started_at = ?",
-        [new Date().toISOString(), now]
+        "UPDATE runs SET completed_at = ?, status = 'completed', errors_found = 0 WHERE id = ?",
+        [new Date().toISOString(), runId]
       );
       return;
     }
@@ -195,7 +199,7 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
             [
               fp,
-              data.error.source,
+              group.repo,
               data.error.message,
               data.error.stackLocation,
               data.error.httpStatus,
@@ -215,14 +219,14 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
   } catch (error) {
     await deps.d1.execute(
       "UPDATE runs SET completed_at = ?, status = 'failed', errors_found = ?, issues_created = ?, issues_commented = ?, issues_reopened = ?, log = ? WHERE started_at = ?",
-      [new Date().toISOString(), errorsFound, issuesCreated, issuesCommented, issuesReopened, String(error), now]
+      [new Date().toISOString(), errorsFound, issuesCreated, issuesCommented, issuesReopened, String(error), runId]
     );
     throw error;
   }
 
   await deps.d1.execute(
     "UPDATE runs SET completed_at = ?, status = 'completed', errors_found = ?, issues_created = ?, issues_commented = ?, issues_reopened = ? WHERE started_at = ?",
-    [new Date().toISOString(), errorsFound, issuesCreated, issuesCommented, issuesReopened, now]
+    [new Date().toISOString(), errorsFound, issuesCreated, issuesCommented, issuesReopened, runId]
   );
 }
 

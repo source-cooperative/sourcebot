@@ -12,7 +12,7 @@ describe("runMonitor", () => {
       vercelSource: { fetchErrors: vi.fn().mockResolvedValue([]) },
       cloudflareSource: { fetchErrors: vi.fn().mockResolvedValue([]) },
       d1: {
-        query: vi.fn().mockResolvedValue([]),
+        query: vi.fn().mockResolvedValue([{ id: 1 }]),
         execute: vi.fn().mockResolvedValue(undefined),
         batch: vi.fn().mockResolvedValue(undefined),
       },
@@ -48,7 +48,9 @@ describe("runMonitor", () => {
     (mockDeps.vercelSource.fetchErrors as any).mockResolvedValueOnce([
       { message: "TypeError: x", stackLocation: "a.ts:1", httpStatus: 500, source: "source-cooperative/source.coop", releaseVersion: "v1", timestamp: Date.now() },
     ]);
-    (mockDeps.d1.query as any).mockResolvedValue([]);
+    (mockDeps.d1.query as any)
+      .mockResolvedValueOnce([{ id: 1 }])  // INSERT RETURNING id
+      .mockResolvedValueOnce([]);           // SELECT known errors
     (mockDeps.classifier.classify as any).mockResolvedValueOnce([
       { title: "TypeError", body: "Details", fingerprints: ["fp1"], repo: "source-cooperative/source.coop" },
     ]);
@@ -61,7 +63,9 @@ describe("runMonitor", () => {
     (mockDeps.cloudflareSource.fetchErrors as any).mockResolvedValueOnce([
       { message: "Error", stackLocation: null, httpStatus: 502, source: "source-cooperative/data.source.coop", releaseVersion: "v1", timestamp: Date.now() },
     ]);
-    (mockDeps.d1.query as any).mockResolvedValue([]);
+    (mockDeps.d1.query as any)
+      .mockResolvedValueOnce([{ id: 1 }])
+      .mockResolvedValueOnce([]);
     (mockDeps.classifier.classify as any).mockResolvedValueOnce([
       { title: "Error", body: "Details", fingerprints: ["fp2"], repo: "source-cooperative/data.source.coop" },
     ]);
@@ -74,7 +78,9 @@ describe("runMonitor", () => {
     (mockDeps.vercelSource.fetchErrors as any).mockResolvedValueOnce([
       { message: "Error", stackLocation: null, httpStatus: 500, source: "source-cooperative/source.coop", releaseVersion: "v1", timestamp: Date.now() },
     ]);
-    (mockDeps.d1.query as any).mockResolvedValue([]);
+    (mockDeps.d1.query as any)
+      .mockResolvedValueOnce([{ id: 1 }])
+      .mockResolvedValueOnce([]);
     (mockDeps.classifier.classify as any).mockResolvedValueOnce([
       { title: "Error", body: "Details", fingerprints: ["fp3"], repo: "source-cooperative/source.coop" },
     ]);
@@ -88,17 +94,19 @@ describe("runMonitor", () => {
     (mockDeps.vercelSource.fetchErrors as any).mockResolvedValueOnce([
       { message: "TypeError: x", stackLocation: "a.ts:1", httpStatus: 500, source: "source-cooperative/source.coop", releaseVersion: "v2.0.0", timestamp: Date.now() },
     ]);
-    // Known error with closed issue on v1.0.0
-    (mockDeps.d1.query as any).mockResolvedValue([
-      {
-        fingerprint: fp,
-        repo: "source-cooperative/source.coop",
-        github_issue_number: 42,
-        github_issue_state: "closed",
-        release_versions: '["v1.0.0"]',
-        last_commented_at: null,
-      },
-    ]);
+    // First query: INSERT RETURNING id; second query: SELECT known errors
+    (mockDeps.d1.query as any)
+      .mockResolvedValueOnce([{ id: 1 }])
+      .mockResolvedValueOnce([
+        {
+          fingerprint: fp,
+          repo: "source-cooperative/source.coop",
+          github_issue_number: 42,
+          github_issue_state: "closed",
+          release_versions: '["v1.0.0"]',
+          last_commented_at: null,
+        },
+      ]);
 
     await runMonitor(mockDeps);
     expect(mockDeps.github.reopenIssue).toHaveBeenCalled();
@@ -111,16 +119,18 @@ describe("runMonitor", () => {
     (mockDeps.vercelSource.fetchErrors as any).mockResolvedValueOnce([
       { message: "TypeError: x", stackLocation: "a.ts:1", httpStatus: 500, source: "source-cooperative/source.coop", releaseVersion: "v1", timestamp: Date.now() },
     ]);
-    (mockDeps.d1.query as any).mockResolvedValue([
-      {
-        fingerprint: fp,
-        repo: "source-cooperative/source.coop",
-        github_issue_number: 10,
-        github_issue_state: "open",
-        release_versions: '["v1"]',
-        last_commented_at: eightDaysAgo,
-      },
-    ]);
+    (mockDeps.d1.query as any)
+      .mockResolvedValueOnce([{ id: 1 }])
+      .mockResolvedValueOnce([
+        {
+          fingerprint: fp,
+          repo: "source-cooperative/source.coop",
+          github_issue_number: 10,
+          github_issue_state: "open",
+          release_versions: '["v1"]',
+          last_commented_at: eightDaysAgo,
+        },
+      ]);
 
     await runMonitor(mockDeps);
     expect(mockDeps.github.commentOnIssue).toHaveBeenCalled();

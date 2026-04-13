@@ -76,6 +76,29 @@ Respond with ONLY the JSON array, no other text.`,
       throw new Error("Unexpected Anthropic response type");
     }
 
-    return JSON.parse(text.text) as ClassifiedErrorGroup[];
+    // Strip markdown code fences if present
+    let jsonText = text.text.trim();
+    if (jsonText.startsWith("```")) {
+      jsonText = jsonText.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      throw new Error(`Failed to parse classifier response as JSON: ${jsonText.slice(0, 200)}`);
+    }
+
+    if (!Array.isArray(parsed)) {
+      throw new Error(`Classifier response is not an array: ${jsonText.slice(0, 200)}`);
+    }
+
+    for (const item of parsed) {
+      if (!item.title || !item.body || !Array.isArray(item.fingerprints) || !item.repo) {
+        throw new Error(`Invalid classified error group: ${JSON.stringify(item).slice(0, 200)}`);
+      }
+    }
+
+    return parsed as ClassifiedErrorGroup[];
   }
 }
