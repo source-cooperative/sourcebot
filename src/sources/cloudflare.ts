@@ -1,14 +1,4 @@
-// TODO: Import RawError from ./vercel.js once that module exists
-// import type { RawError } from "./vercel.js";
-
-export interface RawError {
-  message: string;
-  stackLocation: string | null;
-  httpStatus: number | null;
-  source: string;
-  releaseVersion: string;
-  timestamp: number;
-}
+import type { RawError } from "./vercel.js";
 
 interface CloudflareConfig {
   apiToken: string;
