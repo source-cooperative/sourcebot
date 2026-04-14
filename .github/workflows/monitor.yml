@@ -32,6 +32,6 @@ jobs:
           VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
           VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          SOURCEBOT_APP_ID: ${{ secrets.SOURCEBOT_APP_ID }}
-          SOURCEBOT_APP_PRIVATE_KEY: ${{ secrets.SOURCEBOT_APP_PRIVATE_KEY }}
-          SOURCEBOT_INSTALLATION_ID: ${{ secrets.SOURCEBOT_INSTALLATION_ID }}
+          SC_DEV_BOT_APP_ID: ${{ secrets.SC_DEV_BOT_APP_ID }}
+          SC_DEV_BOT_PRIVATE_KEY: ${{ secrets.SC_DEV_BOT_PRIVATE_KEY }}
+          SC_DEV_BOT_INSTALLATION_ID: ${{ secrets.SC_DEV_BOT_INSTALLATION_ID }}

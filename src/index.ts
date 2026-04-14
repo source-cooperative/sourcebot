@@ -248,9 +248,9 @@ async function main() {
   });
 
   const github = new GitHubClient({
-    appId: requireEnv("SOURCEBOT_APP_ID"),
-    privateKey: requireEnv("SOURCEBOT_APP_PRIVATE_KEY"),
-    installationId: requireEnv("SOURCEBOT_INSTALLATION_ID"),
+    appId: requireEnv("SC_DEV_BOT_APP_ID"),
+    privateKey: requireEnv("SC_DEV_BOT_PRIVATE_KEY"),
+    installationId: requireEnv("SC_DEV_BOT_INSTALLATION_ID"),
   });
 
   const vercelRepo = config.repos.find((r) => r.log_source === "vercel");
