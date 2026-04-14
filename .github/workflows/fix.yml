@@ -1,0 +1,70 @@
+name: Sourcebot Fix
+
+on:
+  workflow_call:
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+      SC_DEV_BOT_APP_ID:
+        required: true
+      SC_DEV_BOT_PRIVATE_KEY:
+        required: true
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.SC_DEV_BOT_APP_ID }}
+          private-key: ${{ secrets.SC_DEV_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Read PR template
+        id: pr-template
+        run: |
+          if [ -f .github/pull_request_template.md ]; then
+            echo "template<<TEMPLATE_EOF" >> "$GITHUB_OUTPUT"
+            cat .github/pull_request_template.md >> "$GITHUB_OUTPUT"
+            echo "TEMPLATE_EOF" >> "$GITHUB_OUTPUT"
+          else
+            echo "template=No PR template found. Use a standard format with: What, How, Testing sections." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Claude Code to fix issue
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ steps.app-token.outputs.token }}
+          prompt: |
+            You are sourcebot, an automated error-fixing bot for Source Cooperative.
+
+            An issue has been assigned to you for fixing. Read the issue carefully, understand the error, find the relevant code, implement a fix, and open a PR.
+
+            Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}
+
+            Issue body:
+            ${{ github.event.issue.body }}
+
+            When creating the PR:
+            1. Create a branch named `sourcebot/fix-${{ github.event.issue.number }}`
+            2. Use this PR template and fill in every section:
+
+            ${{ steps.pr-template.outputs.template }}
+
+            3. Reference the issue: "Fixes #${{ github.event.issue.number }}"
+            4. Request review from: ${{ github.event.sender.login }}
+
+            Important:
+            - Run existing tests to verify your fix doesn't break anything
+            - If the repo has linting, run it
+            - Keep changes minimal and focused on the error
