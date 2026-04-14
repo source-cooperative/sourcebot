@@ -26,12 +26,12 @@ jobs:
       - name: Run monitor
         run: npx tsx src/index.ts
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+          D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID }}
           VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
-          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+          VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          SC_DEV_BOT_APP_ID: ${{ secrets.SC_DEV_BOT_APP_ID }}
+          SC_DEV_BOT_APP_ID: ${{ vars.SC_DEV_BOT_APP_ID }}
           SC_DEV_BOT_PRIVATE_KEY: ${{ secrets.SC_DEV_BOT_PRIVATE_KEY }}
-          SC_DEV_BOT_INSTALLATION_ID: ${{ secrets.SC_DEV_BOT_INSTALLATION_ID }}
+          SC_DEV_BOT_INSTALLATION_ID: ${{ vars.SC_DEV_BOT_INSTALLATION_ID }}

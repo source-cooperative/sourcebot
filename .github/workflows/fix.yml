@@ -5,8 +5,6 @@ on:
     secrets:
       ANTHROPIC_API_KEY:
         required: true
-      SC_DEV_BOT_APP_ID:
-        required: true
       SC_DEV_BOT_PRIVATE_KEY:
         required: true
 
@@ -20,7 +18,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ secrets.SC_DEV_BOT_APP_ID }}
+          app-id: ${{ vars.SC_DEV_BOT_APP_ID }}
           private-key: ${{ secrets.SC_DEV_BOT_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
