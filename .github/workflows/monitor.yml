@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "0 */6 * * *"
   workflow_dispatch:
+    inputs:
+      window_hours:
+        description: "Hours of logs to fetch (default: 6, increase for backfills)"
+        required: false
+        type: number
 
 jobs:
   monitor:
@@ -35,3 +40,4 @@ jobs:
           SC_DEV_BOT_APP_ID: ${{ vars.SC_DEV_BOT_APP_ID }}
           SC_DEV_BOT_PRIVATE_KEY: ${{ secrets.SC_DEV_BOT_PRIVATE_KEY }}
           SC_DEV_BOT_INSTALLATION_ID: ${{ vars.SC_DEV_BOT_INSTALLATION_ID }}
+          WINDOW_HOURS: ${{ inputs.window_hours }}
