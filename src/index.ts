@@ -42,7 +42,7 @@ interface ErrorRecord {
 }
 
 export async function runMonitor(deps: MonitorDeps): Promise<void> {
-  const windowHours = 6;
+  const windowHours = deps.config.window_hours;
   const now = new Date().toISOString();
 
   console.log(`Starting monitor run at ${now} (window: ${windowHours}h)`);

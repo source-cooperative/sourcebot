@@ -15,6 +15,7 @@ export interface Config {
   schedule: string;
   comment_cadence_days: number;
   anthropic_model: string;
+  window_hours: number;
 }
 
 export function loadConfig(path?: string): Config {
@@ -33,6 +34,9 @@ export function loadConfig(path?: string): Config {
       throw new Error(`CF repo ${repo.name} missing cloudflare_script_name`);
     }
   }
+
+  const envWindowHours = process.env.WINDOW_HOURS ? Number(process.env.WINDOW_HOURS) : undefined;
+  parsed.window_hours = envWindowHours ?? parsed.window_hours ?? 6;
 
   return parsed;
 }

@@ -34,6 +34,7 @@ describe("runMonitor", () => {
         schedule: "0 */6 * * *",
         comment_cadence_days: 7,
         anthropic_model: "claude-sonnet-4-6",
+        window_hours: 6,
       },
     };
   });
