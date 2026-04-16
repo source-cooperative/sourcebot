@@ -10,7 +10,7 @@ export interface RawError {
 interface VercelConfig {
   apiToken: string;
   projectId: string;
-  teamId?: string;
+  teamId: string;
 }
 
 interface VercelDeployment {
@@ -70,8 +70,8 @@ export class VercelSource {
       since: since.toString(),
       limit: "20",
       state: "READY",
+      teamId: this.config.teamId,
     });
-    if (this.config.teamId) params.set("teamId", this.config.teamId);
 
     const response = await fetch(`https://api.vercel.com/v6/deployments?${params}`, {
       headers: { Authorization: `Bearer ${this.config.apiToken}` },
@@ -86,10 +86,8 @@ export class VercelSource {
   }
 
   private async fetchDeploymentLogs(deploymentId: string): Promise<VercelLogEntry[]> {
-    const params = new URLSearchParams();
-    if (this.config.teamId) params.set("teamId", this.config.teamId);
-
-    const url = `https://api.vercel.com/v1/projects/${this.config.projectId}/deployments/${deploymentId}/runtime-logs${params.toString() ? "?" + params : ""}`;
+    const params = new URLSearchParams({ teamId: this.config.teamId });
+    const url = `https://api.vercel.com/v1/projects/${this.config.projectId}/deployments/${deploymentId}/runtime-logs?${params}`;
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${this.config.apiToken}` },
     });
@@ -98,7 +96,13 @@ export class VercelSource {
       throw new Error(`Vercel runtime logs API error: ${response.status}`);
     }
 
-    const text = await response.text();
+    // Vercel runtime-logs may return either a JSON array or NDJSON depending on
+    // API version and Accept header. Handle both.
+    const text = (await response.text()).trim();
+    if (!text) return [];
+    if (text.startsWith("[")) {
+      return JSON.parse(text) as VercelLogEntry[];
+    }
     return text
       .split("\n")
       .filter((line) => line.trim())

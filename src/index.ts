@@ -15,7 +15,7 @@ export interface MonitorDeps {
     createIssue(repo: string, options: { title: string; body: string; labels?: string[]; assignees?: string[] }): Promise<{ number: number; html_url: string; state: string }>;
     commentOnIssue(repo: string, issueNumber: number, body: string): Promise<void>;
     reopenIssue(repo: string, issueNumber: number): Promise<void>;
-    assignIssue(repo: string, issueNumber: number, assignees: string[]): Promise<void>;
+    addLabels(repo: string, issueNumber: number, labels: string[]): Promise<void>;
     triggerWorkflowDispatch(repo: string, workflowId: string, ref: string, inputs: Record<string, string>): Promise<void>;
   };
   classifier: {
@@ -45,12 +45,11 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
   const windowHours = 6;
   const now = new Date().toISOString();
 
-  // Record run start
-  const runRows = await deps.d1.query<{ id: number }>(
-    "INSERT INTO runs (started_at, status) VALUES (?, 'running') RETURNING id",
+  // Record run start; keyed by started_at (unique per run via ISO ms timestamp)
+  await deps.d1.execute(
+    "INSERT INTO runs (started_at, status) VALUES (?, 'running')",
     [now]
   );
-  const runId = runRows[0]?.id;
 
   let errorsFound = 0;
   let issuesCreated = 0;
@@ -69,8 +68,8 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
 
     if (allErrors.length === 0) {
       await deps.d1.execute(
-        "UPDATE runs SET completed_at = ?, status = 'completed', errors_found = 0 WHERE id = ?",
-        [new Date().toISOString(), runId]
+        "UPDATE runs SET completed_at = ?, status = 'completed', errors_found = 0 WHERE started_at = ?",
+        [new Date().toISOString(), now]
       );
       return;
     }
@@ -150,6 +149,12 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
             "UPDATE errors SET github_issue_state = 'open', release_versions = ?, last_seen_at = ?, total_count = total_count + ?, window_count = ?, updated_at = ? WHERE fingerprint = ?",
             [JSON.stringify(allVersions), now, data.count, data.count, now, fp]
           );
+        } else {
+          // Closed issue recurring on an already-known release — keep counts current
+          await deps.d1.execute(
+            "UPDATE errors SET last_seen_at = ?, total_count = total_count + ?, window_count = ?, updated_at = ? WHERE fingerprint = ?",
+            [now, data.count, data.count, now, fp]
+          );
         }
       } else if (known.github_issue_state === "open" && known.github_issue_number) {
         const lastCommented = known.last_commented_at ? new Date(known.last_commented_at) : new Date(0);
@@ -187,7 +192,7 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
         issuesCreated++;
 
         if (repoConfig?.auto_fix) {
-          await deps.github.assignIssue(group.repo, issue.number, ["sourcebot[bot]"]);
+          await deps.github.addLabels(group.repo, issue.number, ["sourcebot-fix"]);
         }
 
         for (const fp of group.fingerprints) {
@@ -219,14 +224,14 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
   } catch (error) {
     await deps.d1.execute(
       "UPDATE runs SET completed_at = ?, status = 'failed', errors_found = ?, issues_created = ?, issues_commented = ?, issues_reopened = ?, log = ? WHERE started_at = ?",
-      [new Date().toISOString(), errorsFound, issuesCreated, issuesCommented, issuesReopened, String(error), runId]
+      [new Date().toISOString(), errorsFound, issuesCreated, issuesCommented, issuesReopened, String(error), now]
     );
     throw error;
   }
 
   await deps.d1.execute(
     "UPDATE runs SET completed_at = ?, status = 'completed', errors_found = ?, issues_created = ?, issues_commented = ?, issues_reopened = ? WHERE started_at = ?",
-    [new Date().toISOString(), errorsFound, issuesCreated, issuesCommented, issuesReopened, runId]
+    [new Date().toISOString(), errorsFound, issuesCreated, issuesCommented, issuesReopened, now]
   );
 }
 
@@ -259,7 +264,7 @@ async function main() {
   const vercelSource = new VercelSource({
     apiToken: requireEnv("VERCEL_API_TOKEN"),
     projectId: vercelRepo?.vercel_project_id ?? "",
-    teamId: process.env.VERCEL_TEAM_ID,
+    teamId: requireEnv("VERCEL_TEAM_ID"),
   });
 
   const cloudflareSource = new CloudflareSource({

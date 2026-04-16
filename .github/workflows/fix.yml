@@ -46,7 +46,7 @@ jobs:
           prompt: |
             You are sourcebot, an automated error-fixing bot for Source Cooperative.
 
-            An issue has been assigned to you for fixing. Read the issue carefully, understand the error, find the relevant code, implement a fix, and open a PR.
+            An issue has been labeled `sourcebot-fix` for you to fix. Read the issue carefully, understand the error, find the relevant code, implement a fix, and open a PR.
 
             Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}
 
@@ -60,7 +60,7 @@ jobs:
             ${{ steps.pr-template.outputs.template }}
 
             3. Reference the issue: "Fixes #${{ github.event.issue.number }}"
-            4. Request review from: ${{ github.event.sender.login }}
+            4. Request review from ${{ github.event.sender.login }} (the human who applied the `sourcebot-fix` label)
 
             Important:
             - Run existing tests to verify your fix doesn't break anything

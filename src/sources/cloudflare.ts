@@ -62,14 +62,21 @@ export class CloudflareSource {
 
     const data = (await response.json()) as {
       success: boolean;
-      result: { events: { events: ObservabilityEvent[] } };
+      result?: { events?: ObservabilityEvent[] | { events?: ObservabilityEvent[] } };
     };
 
     if (!data.success) {
-      throw new Error(`CF Observability query failed`);
+      throw new Error(`CF Observability query failed: ${JSON.stringify(data)}`);
     }
 
-    return data.result.events.events.map((event) => ({
+    // The Observability telemetry/query response has shifted shape across versions;
+    // `result.events` may be either the array directly or `{ events: [...] }`.
+    const eventsField = data.result?.events;
+    const events: ObservabilityEvent[] = Array.isArray(eventsField)
+      ? eventsField
+      : eventsField?.events ?? [];
+
+    return events.map((event) => ({
       message: event.$metadata.message ?? event.$metadata.error ?? "Unknown error",
       stackLocation: null,
       httpStatus: event.$metadata.statusCode ?? null,

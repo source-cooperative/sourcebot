@@ -33,7 +33,7 @@ export class GitHubClient {
     const now = Math.floor(Date.now() / 1000);
     const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
     const payload = Buffer.from(
-      JSON.stringify({ iat: now - 60, exp: now + 600, iss: this.config.appId })
+      JSON.stringify({ iat: now - 60, exp: now + 540, iss: this.config.appId })
     ).toString("base64url");
 
     const key = createPrivateKey(this.config.privateKey);
@@ -45,7 +45,8 @@ export class GitHubClient {
   }
 
   private async getInstallationToken(): Promise<string> {
-    if (this.token && this.tokenExpiresAt && this.tokenExpiresAt > new Date()) {
+    const skewMs = 60_000;
+    if (this.token && this.tokenExpiresAt && this.tokenExpiresAt.getTime() - skewMs > Date.now()) {
       return this.token;
     }
 
@@ -109,8 +110,8 @@ export class GitHubClient {
     await this.request("PATCH", `/repos/${repo}/issues/${issueNumber}`, { state: "open" });
   }
 
-  async assignIssue(repo: string, issueNumber: number, assignees: string[]): Promise<void> {
-    await this.request("POST", `/repos/${repo}/issues/${issueNumber}/assignees`, { assignees });
+  async addLabels(repo: string, issueNumber: number, labels: string[]): Promise<void> {
+    await this.request("POST", `/repos/${repo}/issues/${issueNumber}/labels`, { labels });
   }
 
   async triggerWorkflowDispatch(

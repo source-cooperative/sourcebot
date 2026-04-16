@@ -1,9 +1,9 @@
 name: Sourcebot Fix
 on:
   issues:
-    types: [assigned]
+    types: [labeled]
 jobs:
   fix:
-    if: github.event.assignee.login == 'sourcebot[bot]'
+    if: github.event.label.name == 'sourcebot-fix'
     uses: source-cooperative/sourcebot/.github/workflows/fix.yml@main
     secrets: inherit
