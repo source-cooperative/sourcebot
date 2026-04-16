@@ -45,7 +45,8 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
   const windowHours = 6;
   const now = new Date().toISOString();
 
-  // Record run start; keyed by started_at (unique per run via ISO ms timestamp)
+  console.log(`Starting monitor run at ${now} (window: ${windowHours}h)`);
+
   await deps.d1.execute(
     "INSERT INTO runs (started_at, status) VALUES (?, 'running')",
     [now]
@@ -57,16 +58,18 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
   let issuesReopened = 0;
 
   try {
-    // 1. Fetch errors from all sources
+    console.log("Fetching errors from Vercel and Cloudflare Workers...");
     const [vercelErrors, cfErrors] = await Promise.all([
       deps.vercelSource.fetchErrors(windowHours),
       deps.cloudflareSource.fetchErrors(windowHours),
     ]);
+    console.log(`  Vercel: ${vercelErrors.length} errors, Cloudflare: ${cfErrors.length} errors`);
 
     const allErrors = [...vercelErrors, ...cfErrors];
     errorsFound = allErrors.length;
 
     if (allErrors.length === 0) {
+      console.log("No errors found. Run complete.");
       await deps.d1.execute(
         "UPDATE runs SET completed_at = ?, status = 'completed', errors_found = 0 WHERE started_at = ?",
         [new Date().toISOString(), now]
@@ -107,8 +110,8 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
       : [];
 
     const knownMap = new Map(knownErrors.map((e) => [e.fingerprint, e]));
+    console.log(`Fingerprinted into ${errorsByFingerprint.size} unique errors, ${knownErrors.length} already known`);
 
-    // 4. Separate new vs known errors
     const newErrors: Array<{
       fingerprint: string;
       message: string;
@@ -139,6 +142,7 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
         const newVersions = Array.from(data.releaseVersions).filter((v) => !knownVersions.includes(v));
 
         if (newVersions.length > 0 && known.github_issue_number) {
+          console.log(`  Regression: ${fp.slice(0, 8)} on ${newVersions.join(", ")} (issue #${known.github_issue_number})`);
           const comment = `\u26a0\ufe0f **Regression detected**\n\nThis error reappeared on release \`${newVersions.join(", ")}\` (${data.count} occurrences in the last ${windowHours} hours).\n\nEither the fix didn't address this case or there was a regression.`;
           await deps.github.reopenIssue(known.repo, known.github_issue_number);
           await deps.github.commentOnIssue(known.repo, known.github_issue_number, comment);
@@ -161,6 +165,7 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
         const daysSinceComment = (Date.now() - lastCommented.getTime()) / (1000 * 60 * 60 * 24);
 
         if (daysSinceComment >= deps.config.comment_cadence_days) {
+          console.log(`  Weekly comment: ${fp.slice(0, 8)} (issue #${known.github_issue_number}, ${data.count} occurrences)`);
           const comment = `\ud83d\udcca **Ongoing error report**\n\nThis error occurred ${data.count} times in the last ${windowHours} hours.\n\nRelease version(s): \`${Array.from(data.releaseVersions).join(", ")}\``;
           await deps.github.commentOnIssue(known.repo, known.github_issue_number, comment);
           issuesCommented++;
@@ -178,9 +183,10 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
       }
     }
 
-    // 5. Classify new errors and create issues
     if (newErrors.length > 0) {
+      console.log(`Classifying ${newErrors.length} new errors via Anthropic...`);
       const groups = await deps.classifier.classify(newErrors);
+      console.log(`  Grouped into ${groups.length} issues`);
 
       for (const group of groups) {
         const repoConfig = deps.config.repos.find((r) => r.name === group.repo);
@@ -190,6 +196,7 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
           labels: ["sourcebot"],
         });
         issuesCreated++;
+        console.log(`  Created issue #${issue.number} in ${group.repo}: ${group.title}`);
 
         if (repoConfig?.auto_fix) {
           await deps.github.addLabels(group.repo, issue.number, ["sourcebot-fix"]);
@@ -233,6 +240,8 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
     "UPDATE runs SET completed_at = ?, status = 'completed', errors_found = ?, issues_created = ?, issues_commented = ?, issues_reopened = ? WHERE started_at = ?",
     [new Date().toISOString(), errorsFound, issuesCreated, issuesCommented, issuesReopened, now]
   );
+
+  console.log(`Run complete: ${errorsFound} errors, ${issuesCreated} created, ${issuesCommented} commented, ${issuesReopened} reopened`);
 }
 
 // CLI entry point -- called by GitHub Actions
