@@ -45,12 +45,16 @@ export class CloudflareSource {
           queryId: "sourcebot-errors",
           timeframe: { from, to: now },
           view: "events",
-          filters: [
-            { key: "$metadata.level", operation: "eq", type: "string", value: "error" },
-            { key: "$metadata.service", operation: "eq", type: "string", value: this.config.scriptName },
-          ],
-          filterCombination: "and",
           limit: 500,
+          dry: true,
+          parameters: {
+            datasets: [],
+            filters: [
+              { key: "$metadata.level", operation: "eq", type: "string", value: "error" },
+              { key: "$metadata.service", operation: "eq", type: "string", value: this.config.scriptName },
+            ],
+            filterCombination: "and",
+          },
         }),
       }
     );
