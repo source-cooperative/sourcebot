@@ -42,16 +42,15 @@ export class CloudflareSource {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          queryId: "sourcebot-errors",
           timeframe: { from, to: now },
           view: "events",
-          parameters: {
-            filters: [
-              { key: "$metadata.level", operation: "eq", type: "string", value: "error" },
-              { key: "$metadata.service", operation: "eq", type: "string", value: this.config.scriptName },
-            ],
-            filterCombination: "and",
-            limit: 500,
-          },
+          filters: [
+            { key: "$metadata.level", operation: "eq", type: "string", value: "error" },
+            { key: "$metadata.service", operation: "eq", type: "string", value: this.config.scriptName },
+          ],
+          filterCombination: "and",
+          limit: 500,
         }),
       }
     );
