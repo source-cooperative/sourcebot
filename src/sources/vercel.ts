@@ -1,3 +1,5 @@
+import { redactLog } from "../fingerprint.js";
+
 export interface RawError {
   message: string;
   stackLocation: string | null;
@@ -65,7 +67,7 @@ export class VercelSource {
             releaseVersion: commitSha,
             timestamp: log.timestampInMs,
             dashboardUrl: this.buildDashboardUrl(log.timestampInMs),
-            rawLog: this.formatRawLog(log),
+            rawLog: redactLog(this.formatRawLog(log)),
           });
         }
 

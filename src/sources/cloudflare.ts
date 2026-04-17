@@ -1,4 +1,5 @@
 import type { RawError } from "./vercel.js";
+import { redactLog } from "../fingerprint.js";
 
 interface CloudflareConfig {
   apiToken: string;
@@ -99,7 +100,7 @@ export class CloudflareSource {
         releaseVersion: "unknown",
         timestamp: event.timestamp,
         dashboardUrl: this.config.dashboardUrl ?? null,
-        rawLog,
+        rawLog: redactLog(rawLog),
       };
     });
   }

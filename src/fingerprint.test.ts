@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeFingerprint, normalizeMessage } from "./fingerprint.js";
+import { computeFingerprint, normalizeMessage, redactLog } from "./fingerprint.js";
 
 describe("normalizeMessage", () => {
   it("strips UUIDs", () => {
@@ -20,6 +20,47 @@ describe("normalizeMessage", () => {
   it("strips numeric IDs", () => {
     const msg = "Record 123456 not found";
     expect(normalizeMessage(msg)).toBe("Record <NUM> not found");
+  });
+});
+
+describe("redactLog", () => {
+  it("redacts query string values", () => {
+    expect(redactLog("GET /api/search?token=abc123&q=hello")).toBe(
+      "GET /api/search?token=<REDACTED>&q=<REDACTED>"
+    );
+  });
+
+  it("redacts email addresses", () => {
+    expect(redactLog("User user@example.com not found")).toBe("User <EMAIL> not found");
+  });
+
+  it("redacts IPv4 addresses", () => {
+    expect(redactLog("Connection from 192.168.1.100 refused")).toBe(
+      "Connection from <IP> refused"
+    );
+  });
+
+  it("redacts JWT tokens", () => {
+    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc123_signature";
+    expect(redactLog(`Bearer ${jwt}`)).toContain("<JWT>");
+  });
+
+  it("redacts connection strings", () => {
+    expect(redactLog("postgres://admin:secret@db.host.com:5432/mydb")).toBe("<CONNECTION_STRING>");
+  });
+
+  it("redacts Authorization headers", () => {
+    expect(redactLog("Authorization: Bearer sk-ant-12345")).toBe("Authorization: <REDACTED>");
+  });
+
+  it("redacts UUIDs", () => {
+    expect(redactLog("session 550e8400-e29b-41d4-a716-446655440000")).toBe("session <UUID>");
+  });
+
+  it("preserves non-sensitive content", () => {
+    expect(redactLog("TypeError: Cannot read property 'map' of undefined")).toBe(
+      "TypeError: Cannot read property 'map' of undefined"
+    );
   });
 });
 
