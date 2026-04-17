@@ -2,11 +2,13 @@ repos:
   - name: source-cooperative/source.coop
     log_source: vercel
     vercel_project_id: prj_uU5LXO7OUjHYb0nC1AKjTqQKW0Yj
+    dashboard_url: https://vercel.com/radiantearth/source-cooperative/logs
     auto_fix: false
 
   - name: source-cooperative/data.source.coop
     log_source: cloudflare_workers
     cloudflare_script_name: data-source-coop
+    dashboard_url: https://dash.cloudflare.com/1335bb5b87a1c2e1de2ca03408c23b71/workers/services/view/source-data-proxy/production/observability/invocations
     auto_fix: true
 
 schedule: "0 */6 * * *"

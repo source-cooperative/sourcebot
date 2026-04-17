@@ -5,12 +5,14 @@ export interface RawError {
   source: string;
   releaseVersion: string;
   timestamp: number;
+  dashboardUrl: string | null;
 }
 
 interface VercelConfig {
   apiToken: string;
   projectId: string;
   teamId: string;
+  dashboardUrl?: string;
 }
 
 interface VercelDeployment {
@@ -20,12 +22,15 @@ interface VercelDeployment {
 }
 
 interface VercelLogEntry {
-  level: string;
+  level: "trace" | "debug" | "info" | "warning" | "error" | "fatal";
   message: string;
-  responseStatusCode?: number;
-  requestPath?: string;
-  requestMethod?: string;
-  source?: string;
+  messageTruncated: boolean;
+  responseStatusCode: number;
+  requestPath: string;
+  requestMethod: string;
+  source: "delimiter" | "edge-function" | "edge-middleware" | "serverless" | "request";
+  domain: string;
+  rowId: string;
   timestampInMs: number;
 }
 
@@ -40,28 +45,33 @@ export class VercelSource {
   async fetchErrors(windowHours: number): Promise<RawError[]> {
     const since = Date.now() - windowHours * 60 * 60 * 1000;
     const deployments = await this.listRecentDeployments(since);
-    const errors: RawError[] = [];
 
-    for (const deployment of deployments) {
-      const logs = await this.fetchDeploymentLogs(deployment.uid);
-      const commitSha = deployment.meta?.githubCommitSha ?? "unknown";
+    const results = await Promise.all(
+      deployments.map(async (deployment) => {
+        const logs = await this.fetchDeploymentLogs(deployment.uid);
+        const commitSha = deployment.meta?.githubCommitSha ?? "unknown";
+        const errors: RawError[] = [];
 
-      for (const log of logs) {
-        if (log.timestampInMs < since) continue;
-        if (log.level !== "error" && (log.responseStatusCode ?? 200) < 500) continue;
+        for (const log of logs) {
+          if (log.timestampInMs < since) continue;
+          if (log.level !== "error" && (log.responseStatusCode ?? 200) < 500) continue;
 
-        errors.push({
-          message: log.message,
-          stackLocation: this.extractStackLocation(log.message),
-          httpStatus: log.responseStatusCode ?? null,
-          source: this.repoName,
-          releaseVersion: commitSha,
-          timestamp: log.timestampInMs,
-        });
-      }
-    }
+          errors.push({
+            message: log.message,
+            stackLocation: this.extractStackLocation(log.message),
+            httpStatus: log.responseStatusCode ?? null,
+            source: this.repoName,
+            releaseVersion: commitSha,
+            timestamp: log.timestampInMs,
+            dashboardUrl: this.buildDashboardUrl(log.timestampInMs),
+          });
+        }
 
-    return errors;
+        return errors;
+      })
+    );
+
+    return results.flat();
   }
 
   private async listRecentDeployments(since: number): Promise<VercelDeployment[]> {
@@ -107,6 +117,18 @@ export class VercelSource {
       .split("\n")
       .filter((line) => line.trim())
       .map((line) => JSON.parse(line) as VercelLogEntry);
+  }
+
+  private buildDashboardUrl(timestampMs: number): string | null {
+    if (!this.config.dashboardUrl) return null;
+    const margin = 60_000; // ±1 minute around the error
+    const params = new URLSearchParams({
+      timeline: "custom",
+      startDate: String(timestampMs - margin),
+      endDate: String(timestampMs + margin),
+      levels: "error",
+    });
+    return `${this.config.dashboardUrl}?${params}`;
   }
 
   private extractStackLocation(message: string): string | null {

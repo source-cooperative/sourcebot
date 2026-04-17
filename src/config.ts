@@ -7,6 +7,7 @@ export interface RepoConfig {
   log_source: "vercel" | "cloudflare_workers";
   vercel_project_id?: string;
   cloudflare_script_name?: string;
+  dashboard_url?: string;
   auto_fix: boolean;
 }
 

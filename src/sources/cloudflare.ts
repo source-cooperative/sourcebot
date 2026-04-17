@@ -4,6 +4,7 @@ interface CloudflareConfig {
   apiToken: string;
   accountId: string;
   scriptName: string;
+  dashboardUrl?: string;
 }
 
 interface ObservabilityEvent {
@@ -86,6 +87,7 @@ export class CloudflareSource {
       source: this.repoName,
       releaseVersion: "unknown",
       timestamp: event.timestamp,
+      dashboardUrl: this.config.dashboardUrl ?? null,
     }));
   }
 }
