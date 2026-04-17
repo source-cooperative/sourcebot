@@ -6,6 +6,7 @@ export interface RawError {
   releaseVersion: string;
   timestamp: number;
   dashboardUrl: string | null;
+  rawLog: string | null;
 }
 
 interface VercelConfig {
@@ -64,6 +65,7 @@ export class VercelSource {
             releaseVersion: commitSha,
             timestamp: log.timestampInMs,
             dashboardUrl: this.buildDashboardUrl(log.timestampInMs),
+            rawLog: this.formatRawLog(log),
           });
         }
 
@@ -117,6 +119,18 @@ export class VercelSource {
       .split("\n")
       .filter((line) => line.trim())
       .map((line) => JSON.parse(line) as VercelLogEntry);
+  }
+
+  private formatRawLog(log: VercelLogEntry): string {
+    const time = new Date(log.timestampInMs).toISOString();
+    const lines = [
+      `${time} [${log.level}] ${log.source}`,
+      `${log.requestMethod} ${log.requestPath} → ${log.responseStatusCode}`,
+      `Host: ${log.domain}`,
+      "",
+      log.message,
+    ];
+    return lines.join("\n");
   }
 
   private buildDashboardUrl(timestampMs: number): string | null {

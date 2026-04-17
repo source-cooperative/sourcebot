@@ -47,7 +47,7 @@ describe("runMonitor", () => {
 
   it("creates issues for new errors", async () => {
     (mockDeps.vercelSource.fetchErrors as any).mockResolvedValueOnce([
-      { message: "TypeError: x", stackLocation: "a.ts:1", httpStatus: 500, source: "source-cooperative/source.coop", releaseVersion: "v1", timestamp: Date.now(), dashboardUrl: null },
+      { message: "TypeError: x", stackLocation: "a.ts:1", httpStatus: 500, source: "source-cooperative/source.coop", releaseVersion: "v1", timestamp: Date.now(), dashboardUrl: null, rawLog: null },
     ]);
     (mockDeps.d1.query as any).mockResolvedValueOnce([]);
     (mockDeps.classifier.classify as any).mockResolvedValueOnce([
@@ -60,7 +60,7 @@ describe("runMonitor", () => {
 
   it("self-assigns when auto_fix is true", async () => {
     (mockDeps.cloudflareSource.fetchErrors as any).mockResolvedValueOnce([
-      { message: "Error", stackLocation: null, httpStatus: 502, source: "source-cooperative/data.source.coop", releaseVersion: "v1", timestamp: Date.now(), dashboardUrl: null },
+      { message: "Error", stackLocation: null, httpStatus: 502, source: "source-cooperative/data.source.coop", releaseVersion: "v1", timestamp: Date.now(), dashboardUrl: null, rawLog: null },
     ]);
     (mockDeps.d1.query as any).mockResolvedValueOnce([]);
     (mockDeps.classifier.classify as any).mockResolvedValueOnce([
@@ -73,7 +73,7 @@ describe("runMonitor", () => {
 
   it("does not self-assign when auto_fix is false", async () => {
     (mockDeps.vercelSource.fetchErrors as any).mockResolvedValueOnce([
-      { message: "Error", stackLocation: null, httpStatus: 500, source: "source-cooperative/source.coop", releaseVersion: "v1", timestamp: Date.now(), dashboardUrl: null },
+      { message: "Error", stackLocation: null, httpStatus: 500, source: "source-cooperative/source.coop", releaseVersion: "v1", timestamp: Date.now(), dashboardUrl: null, rawLog: null },
     ]);
     (mockDeps.d1.query as any).mockResolvedValueOnce([]);
     (mockDeps.classifier.classify as any).mockResolvedValueOnce([
@@ -87,7 +87,7 @@ describe("runMonitor", () => {
   it("reopens closed issues on new release version", async () => {
     const fp = computeFingerprint("TypeError: x", "a.ts:1", 500);
     (mockDeps.vercelSource.fetchErrors as any).mockResolvedValueOnce([
-      { message: "TypeError: x", stackLocation: "a.ts:1", httpStatus: 500, source: "source-cooperative/source.coop", releaseVersion: "v2.0.0", timestamp: Date.now(), dashboardUrl: null },
+      { message: "TypeError: x", stackLocation: "a.ts:1", httpStatus: 500, source: "source-cooperative/source.coop", releaseVersion: "v2.0.0", timestamp: Date.now(), dashboardUrl: null, rawLog: null },
     ]);
     (mockDeps.d1.query as any).mockResolvedValueOnce([
       {
@@ -109,7 +109,7 @@ describe("runMonitor", () => {
     const fp = computeFingerprint("TypeError: x", "a.ts:1", 500);
     const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
     (mockDeps.vercelSource.fetchErrors as any).mockResolvedValueOnce([
-      { message: "TypeError: x", stackLocation: "a.ts:1", httpStatus: 500, source: "source-cooperative/source.coop", releaseVersion: "v1", timestamp: Date.now(), dashboardUrl: null },
+      { message: "TypeError: x", stackLocation: "a.ts:1", httpStatus: 500, source: "source-cooperative/source.coop", releaseVersion: "v1", timestamp: Date.now(), dashboardUrl: null, rawLog: null },
     ]);
     (mockDeps.d1.query as any).mockResolvedValueOnce([
       {

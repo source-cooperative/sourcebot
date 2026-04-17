@@ -80,14 +80,27 @@ export class CloudflareSource {
       ? eventsField
       : eventsField?.events ?? [];
 
-    return events.map((event) => ({
-      message: event.$metadata.message ?? event.$metadata.error ?? "Unknown error",
-      stackLocation: null,
-      httpStatus: event.$metadata.statusCode ?? null,
-      source: this.repoName,
-      releaseVersion: "unknown",
-      timestamp: event.timestamp,
-      dashboardUrl: this.config.dashboardUrl ?? null,
-    }));
+    return events.map((event) => {
+      const message = event.$metadata.message ?? event.$metadata.error ?? "Unknown error";
+      const time = new Date(event.timestamp).toISOString();
+      const rawLog = [
+        `${time} [${event.$metadata.level}] ${event.$metadata.service}`,
+        event.$metadata.statusCode ? `Status: ${event.$metadata.statusCode}` : null,
+        event.$metadata.traceId ? `Trace: ${event.$metadata.traceId}` : null,
+        "",
+        message,
+      ].filter(Boolean).join("\n");
+
+      return {
+        message,
+        stackLocation: null,
+        httpStatus: event.$metadata.statusCode ?? null,
+        source: this.repoName,
+        releaseVersion: "unknown",
+        timestamp: event.timestamp,
+        dashboardUrl: this.config.dashboardUrl ?? null,
+        rawLog,
+      };
+    });
   }
 }

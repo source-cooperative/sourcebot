@@ -47,6 +47,14 @@ function formatSampleLinks(urls: string[]): string {
   return `\n\n**Dashboard links:**\n${links}`;
 }
 
+function formatSampleLogs(logs: string[]): string {
+  if (logs.length === 0) return "";
+  const details = logs.map((log, i) =>
+    `<details>\n<summary>Log sample ${i + 1}</summary>\n\n\`\`\`\n${log}\n\`\`\`\n\n</details>`
+  ).join("\n");
+  return `\n\n${details}`;
+}
+
 function formatVersion(version: string, repo: string): string {
   if (version === "unknown") return "`unknown`";
   // Git SHA (7-40 hex chars) → link to commit
@@ -97,10 +105,10 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
     }
 
     // 2. Compute fingerprints and aggregate
-    const maxSampleLinks = 3;
+    const maxSamples = 3;
     const errorsByFingerprint = new Map<
       string,
-      { error: RawError; count: number; fingerprint: string; releaseVersions: Set<string>; sampleUrls: string[] }
+      { error: RawError; count: number; fingerprint: string; releaseVersions: Set<string>; sampleUrls: string[]; sampleLogs: string[] }
     >();
 
     for (const error of allErrors) {
@@ -109,8 +117,9 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
       if (existing) {
         existing.count++;
         existing.releaseVersions.add(error.releaseVersion);
-        if (error.dashboardUrl && existing.sampleUrls.length < maxSampleLinks) {
-          existing.sampleUrls.push(error.dashboardUrl);
+        if (existing.sampleUrls.length < maxSamples) {
+          if (error.dashboardUrl) existing.sampleUrls.push(error.dashboardUrl);
+          if (error.rawLog) existing.sampleLogs.push(error.rawLog);
         }
       } else {
         errorsByFingerprint.set(fp, {
@@ -119,6 +128,7 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
           fingerprint: fp,
           releaseVersions: new Set([error.releaseVersion]),
           sampleUrls: error.dashboardUrl ? [error.dashboardUrl] : [],
+          sampleLogs: error.rawLog ? [error.rawLog] : [],
         });
       }
     }
@@ -167,7 +177,7 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
 
         if (newVersions.length > 0 && known.github_issue_number) {
           console.log(`  Regression: ${fp.slice(0, 8)} on ${newVersions.join(", ")} (issue #${known.github_issue_number})`);
-          const comment = `\u26a0\ufe0f **Regression detected**\n\nThis error reappeared on ${formatVersions(newVersions, known.repo)} (${data.count} occurrences in the last ${windowHours} hours).\n\nEither the fix didn't address this case or there was a regression.${formatSampleLinks(data.sampleUrls)}`;
+          const comment = `\u26a0\ufe0f **Regression detected**\n\nThis error reappeared on ${formatVersions(newVersions, known.repo)} (${data.count} occurrences in the last ${windowHours} hours).\n\nEither the fix didn't address this case or there was a regression.${formatSampleLinks(data.sampleUrls)}${formatSampleLogs(data.sampleLogs)}`;
           await deps.github.reopenIssue(known.repo, known.github_issue_number);
           await deps.github.commentOnIssue(known.repo, known.github_issue_number, comment);
           issuesReopened++;
@@ -190,7 +200,7 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
 
         if (daysSinceComment >= deps.config.comment_cadence_days) {
           console.log(`  Weekly comment: ${fp.slice(0, 8)} (issue #${known.github_issue_number}, ${data.count} occurrences)`);
-          const comment = `\ud83d\udcca **Ongoing error report**\n\nThis error occurred ${data.count} times in the last ${windowHours} hours.\n\nRelease version(s): ${formatVersions(data.releaseVersions, known.repo)}${formatSampleLinks(data.sampleUrls)}`;
+          const comment = `\ud83d\udcca **Ongoing error report**\n\nThis error occurred ${data.count} times in the last ${windowHours} hours.\n\nRelease version(s): ${formatVersions(data.releaseVersions, known.repo)}${formatSampleLinks(data.sampleUrls)}${formatSampleLogs(data.sampleLogs)}`;
           await deps.github.commentOnIssue(known.repo, known.github_issue_number, comment);
           issuesCommented++;
 
@@ -215,11 +225,17 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
       for (const group of groups) {
         const repoConfig = deps.config.repos.find((r) => r.name === group.repo);
         const groupSampleUrls: string[] = [];
+        const groupSampleLogs: string[] = [];
         for (const fp of group.fingerprints) {
           const data = errorsByFingerprint.get(fp);
-          if (data) groupSampleUrls.push(...data.sampleUrls);
+          if (data) {
+            groupSampleUrls.push(...data.sampleUrls);
+            groupSampleLogs.push(...data.sampleLogs);
+          }
         }
-        const body = group.body + formatSampleLinks(groupSampleUrls.slice(0, maxSampleLinks));
+        const body = group.body
+          + formatSampleLinks(groupSampleUrls.slice(0, maxSamples))
+          + formatSampleLogs(groupSampleLogs.slice(0, maxSamples));
         const issue = await deps.github.createIssue(group.repo, {
           title: group.title,
           body,
