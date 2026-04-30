@@ -1,34 +1,40 @@
 // src/classifier.test.ts
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ErrorClassifier, type ClassifiedErrorGroup } from "./classifier.js";
 
+const queryMock = vi.fn();
+
+vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
+  query: (params: unknown) => queryMock(params),
+}));
+
+function mockResult(resultText: string) {
+  queryMock.mockImplementationOnce(() =>
+    (async function* () {
+      yield { type: "result", subtype: "success", result: resultText };
+    })()
+  );
+}
+
 describe("ErrorClassifier", () => {
-  it("calls Anthropic API and parses structured response", async () => {
-    const mockCreate = vi.fn().mockResolvedValueOnce({
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify([
-            {
-              title: "[source.coop] TypeError in API handler",
-              body: "## Error Summary\nTypeError: Cannot read properties of undefined\n\n## Details\n- **Occurrences:** 15 in the last 6 hours\n- **Release:** v1.2.3\n- **Stack:** api/handler.ts:42\n\n## Probable Cause\nMissing null check on user input.",
-              fingerprints: ["abc123"],
-              repo: "source-cooperative/source.coop",
-            },
-          ] satisfies ClassifiedErrorGroup[]),
-        },
-      ],
-    });
+  beforeEach(() => {
+    queryMock.mockReset();
+  });
 
-    const classifier = new ErrorClassifier({
-      apiKey: "test-key",
-      model: "claude-sonnet-4-6",
-    });
+  it("calls the agent SDK and parses structured response", async () => {
+    const groups: ClassifiedErrorGroup[] = [
+      {
+        title: "[source.coop] TypeError in API handler",
+        body: "## Error Summary\nTypeError: Cannot read properties of undefined\n\n## Details\n- **Occurrences:** 15 in the last 6 hours\n- **Release:** v1.2.3\n- **Stack:** api/handler.ts:42\n\n## Probable Cause\nMissing null check on user input.",
+        fingerprints: ["abc123"],
+        repo: "source-cooperative/source.coop",
+      },
+    ];
+    mockResult(JSON.stringify(groups));
 
-    // Replace the client's create method
-    (classifier as any).client = { messages: { create: mockCreate } };
+    const classifier = new ErrorClassifier({ model: "claude-sonnet-4-6" });
 
-    const groups = await classifier.classify([
+    const result = await classifier.classify([
       {
         fingerprint: "abc123",
         message: "TypeError: Cannot read properties of undefined",
@@ -40,18 +46,45 @@ describe("ErrorClassifier", () => {
       },
     ]);
 
-    expect(groups).toHaveLength(1);
-    expect(groups[0].title).toContain("TypeError");
-    expect(groups[0].fingerprints).toContain("abc123");
+    expect(result).toHaveLength(1);
+    expect(result[0].title).toContain("TypeError");
+    expect(result[0].fingerprints).toContain("abc123");
+    expect(queryMock).toHaveBeenCalledOnce();
   });
 
-  it("returns empty array for no errors", async () => {
-    const classifier = new ErrorClassifier({
-      apiKey: "test-key",
-      model: "claude-sonnet-4-6",
-    });
+  it("strips markdown code fences from the response", async () => {
+    const groups: ClassifiedErrorGroup[] = [
+      {
+        title: "[repo] Error",
+        body: "body",
+        fingerprints: ["x"],
+        repo: "owner/repo",
+      },
+    ];
+    mockResult("```json\n" + JSON.stringify(groups) + "\n```");
 
-    const groups = await classifier.classify([]);
-    expect(groups).toEqual([]);
+    const classifier = new ErrorClassifier({ model: "claude-sonnet-4-6" });
+
+    const result = await classifier.classify([
+      {
+        fingerprint: "x",
+        message: "msg",
+        stackLocation: null,
+        httpStatus: null,
+        source: "owner/repo",
+        releaseVersion: "v1",
+        count: 1,
+      },
+    ]);
+
+    expect(result).toHaveLength(1);
+  });
+
+  it("returns empty array for no errors without calling the SDK", async () => {
+    const classifier = new ErrorClassifier({ model: "claude-sonnet-4-6" });
+
+    const result = await classifier.classify([]);
+    expect(result).toEqual([]);
+    expect(queryMock).not.toHaveBeenCalled();
   });
 });

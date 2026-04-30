@@ -331,7 +331,6 @@ async function main() {
   });
 
   const classifier = new ErrorClassifier({
-    apiKey: requireEnv("ANTHROPIC_API_KEY"),
     model: config.anthropic_model,
   });
 

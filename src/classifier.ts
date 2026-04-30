@@ -1,9 +1,10 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { query, type Options } from "@anthropic-ai/claude-agent-sdk";
 
 interface ClassifierConfig {
-  apiKey: string;
   model: string;
 }
+
+
 
 export interface ErrorForClassification {
   fingerprint: string;
@@ -22,12 +23,13 @@ export interface ClassifiedErrorGroup {
   repo: string;
 }
 
+const SYSTEM_PROMPT =
+  "You are an error triage bot for Source Cooperative. Analyze the errors the user provides, group related ones (same root cause), and write a GitHub issue for each group. Respond with ONLY a JSON array, no other text or markdown.";
+
 export class ErrorClassifier {
-  private client: Anthropic;
   private model: string;
 
   constructor(config: ClassifierConfig) {
-    this.client = new Anthropic({ apiKey: config.apiKey });
     this.model = config.model;
   }
 
@@ -48,15 +50,7 @@ export class ErrorClassifier {
       )
       .join("\n\n");
 
-    const response = await this.client.messages.create({
-      model: this.model,
-      max_tokens: 4096,
-      messages: [
-        {
-          role: "user",
-          content: `You are an error triage bot for Source Cooperative. Analyze these errors, group related ones (same root cause), and write a GitHub issue for each group.
-
-${errorList}
+    const prompt = `${errorList}
 
 Respond with a JSON array. Each element:
 {
@@ -66,18 +60,32 @@ Respond with a JSON array. Each element:
   "repo": "owner/repo"
 }
 
-Respond with ONLY the JSON array, no other text.`,
-        },
-      ],
-    });
+Respond with ONLY the JSON array, no other text.`;
 
-    const text = response.content[0];
-    if (text.type !== "text") {
-      throw new Error("Unexpected Anthropic response type");
+    const options: Options = {
+      model: this.model,
+      systemPrompt: SYSTEM_PROMPT,
+      maxTurns: 1,
+      tools: [],
+      settingSources: [],
+    };
+
+    let resultText: string | null = null;
+    for await (const message of query({ prompt, options })) {
+      if (message.type === "result") {
+        if (message.subtype !== "success") {
+          throw new Error(`Classifier query failed: ${message.subtype}`);
+        }
+        resultText = message.result;
+      }
+    }
+
+    if (resultText === null) {
+      throw new Error("Classifier returned no result message");
     }
 
     // Strip markdown code fences if present
-    let jsonText = text.text.trim();
+    let jsonText = resultText.trim();
     if (jsonText.startsWith("```")) {
       jsonText = jsonText.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
     }
