@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "monitor": "tsx src/index.ts",
+    "digest": "tsx src/digest.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit"

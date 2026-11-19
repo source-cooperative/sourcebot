@@ -125,4 +125,13 @@ export class GitHubClient {
       inputs,
     });
   }
+
+  /** Open issues (not pull requests), most recently updated first, up to 100. */
+  async listOpenIssues(repo: string): Promise<Array<{ number: number; title: string }>> {
+    const items = (await this.request(
+      "GET",
+      `/repos/${repo}/issues?state=open&per_page=100&sort=updated`
+    )) as Array<{ number: number; title: string; pull_request?: unknown }>;
+    return items.filter((i) => !i.pull_request).map((i) => ({ number: i.number, title: i.title }));
+  }
 }

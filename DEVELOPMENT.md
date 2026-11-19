@@ -36,6 +36,7 @@ At https://dash.cloudflare.com/profile/api-tokens, create a Custom Token with:
 - Account → D1: Edit
 - Account → Workers Observability: Read
 - Account → Account Analytics: Read
+- Account → Notifications: Read (the digest reads alert policies and history)
 
 Scope to your specific account.
 
@@ -67,6 +68,9 @@ At https://console.anthropic.com/settings/keys, create a key named `sourcebot`. 
 | Variable | `VERCEL_TEAM_ID`             |
 | Secret   | `CLOUDFLARE_API_TOKEN`       |
 | Secret   | `VERCEL_API_TOKEN`           |
+| Secret   | `SLACK_WEBHOOK_URL`          |
+
+`SLACK_WEBHOOK_URL` is a Slack incoming webhook for the channel the weekly digest posts to (#devops). Without it the digest prints to the workflow log instead of posting.
 
 ### 7. Initialize the D1 Schema
 
@@ -98,12 +102,19 @@ repos:
 
   - name: source-cooperative/data.source.coop
     log_source: cloudflare_workers
-    cloudflare_script_name: data-source-coop
-    auto_fix: true
+    cloudflare_script_name: source-data-proxy
+    cloudflare_issues_since: "2026-11-19T00:00:00Z" # older Workers Issues groups are not filed
+    auto_fix: false
 
 schedule: "0 */6 * * *"
 comment_cadence_days: 7
 anthropic_model: claude-sonnet-4-6
+
+digest:
+  repo: source-cooperative/data.source.coop
+  script_name: source-data-proxy
+  analytics_dataset: source_data_proxy_production
+  days: 7
 ```
 
 When `auto_fix: true`, the monitor self-assigns new issues to Scooter, triggering the fix workflow automatically.
@@ -115,6 +126,7 @@ npm install
 npm test           # Run test suite (vitest)
 npm run lint       # Type check (tsc --noEmit)
 npm run monitor    # Run the monitor locally (requires env vars)
+npm run digest     # Run the digest locally; prints instead of posting unless SLACK_WEBHOOK_URL is set
 ```
 
 ## Project Structure
@@ -123,6 +135,7 @@ npm run monitor    # Run the monitor locally (requires env vars)
 sourcebot/
 ├── .github/workflows/
 │   ├── monitor.yml          Cron monitor
+│   ├── digest.yml           Weekly observability digest
 │   ├── fix.yml              Reusable fix workflow
 │   └── ci.yml               Test and type-check on PRs
 ├── caller-workflows/
@@ -131,6 +144,7 @@ sourcebot/
 │   └── init-d1.sh           One-time schema setup
 ├── src/
 │   ├── index.ts             Main orchestrator + CLI entry
+│   ├── digest.ts            Weekly observability digest + CLI entry
 │   ├── config.ts            Load config.yaml
 │   ├── d1.ts                D1 REST API client
 │   ├── github.ts            GitHub App auth + issue management
@@ -138,7 +152,7 @@ sourcebot/
 │   ├── classifier.ts        Anthropic API for error grouping
 │   └── sources/
 │       ├── vercel.ts        Vercel runtime logs
-│       └── cloudflare.ts    Workers Observability
+│       └── cloudflare.ts    Workers Observability Issues
 ├── config.yaml              Which repos to monitor
 └── schema.sql               D1 schema
 ```

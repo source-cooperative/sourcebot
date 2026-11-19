@@ -9,11 +9,19 @@ The GitHub App is named **Scooter** (Source Cooperative Operator for Observation
 **Monitor workflow** (runs every 6 hours):
 
 - Fetches runtime errors from Vercel for `source.coop`
-- Fetches error-level logs from Cloudflare Workers Observability for `data.source.coop`
+- Fetches Cloudflare's Workers Observability Issues (its own grouping of exceptions, 5xx responses and ERROR lines) for `data.source.coop`, skipping vulnerability-scan detections
 - Computes a fingerprint for each error (normalized message + stack location + status code)
 - Groups new errors via the Anthropic API and creates GitHub issues in the appropriate target repo
 - Reopens closed issues when the same error recurs on a newer release version
 - Comments weekly on open issues with updated occurrence counts
+
+**Digest workflow** (Mondays 16:00 UTC):
+
+- Gathers the past week of the data proxy's observability: alert notifications and monitor definitions, Workers Issues, Analytics Engine traffic (daily requests and 5xx, read p99 and its worst 15-minute windows, top 5xx and busiest products), Workers Logs WARN/ERROR volume and top sources, and `data.source.coop`'s open issues
+- Has Claude write a short review (which alerts were real, what drove errors and latency, which noise sources are tracked by an open issue and which are not, suggested actions) and posts it to Slack
+- Only suggests: it files no issues and changes no monitors
+
+Both scheduled workflows re-enable themselves on each run, so GitHub's 60-day inactivity rule does not switch them off.
 
 **Fix workflow** (triggered by issue assignment):
 
@@ -29,6 +37,7 @@ State lives in Cloudflare D1, accessed via its REST API.
 ```
 GitHub Actions (this repo)
 ├── monitor.yml    Cron: fetch logs → classify → create/update issues
+├── digest.yml     Weekly: gather proxy observability → summarize → Slack
 └── fix.yml        Reusable: called from target repos on issue assignment
 
 Target repos (source.coop, data.source.coop)

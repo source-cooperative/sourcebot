@@ -9,6 +9,10 @@ export interface RawError {
   timestamp: number;
   dashboardUrl: string | null;
   rawLog: string | null;
+  /** Occurrences this entry stands for (default 1). */
+  count?: number;
+  /** `count` is a running total since the error was first seen, not a count for this window. */
+  countIsTotal?: boolean;
 }
 
 interface VercelConfig {

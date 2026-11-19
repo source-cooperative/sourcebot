@@ -46,7 +46,7 @@ export class ErrorClassifier {
   HTTP Status: ${e.httpStatus ?? "N/A"}
   Repo: ${e.source}
   Release: ${e.releaseVersion}
-  Occurrences (last window): ${e.count}`
+  Occurrences: ${e.count}`
       )
       .join("\n\n");
 

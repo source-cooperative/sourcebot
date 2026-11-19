@@ -55,6 +55,17 @@ function formatSampleLogs(logs: string[]): string {
   return `\n\n${details}`;
 }
 
+function describeCount(count: number, countIsTotal: boolean, windowHours: number): string {
+  return countIsTotal
+    ? `${count} times in total since it was first seen`
+    : `${count} times in the last ${windowHours} hours`;
+}
+
+/** Params for `total_count = MAX(total_count + ?, ?)`: add a window's count, or raise to a running total. */
+function totalParams(data: { count: number; countIsTotal: boolean }): [number, number] {
+  return data.countIsTotal ? [0, data.count] : [data.count, 0];
+}
+
 function formatVersion(version: string, repo: string): string {
   if (version === "unknown") return "`unknown`";
   // Git SHA (7-40 hex chars) → link to commit
@@ -108,14 +119,14 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
     const maxSamples = 3;
     const errorsByFingerprint = new Map<
       string,
-      { error: RawError; count: number; fingerprint: string; releaseVersions: Set<string>; sampleUrls: string[]; sampleLogs: string[] }
+      { error: RawError; count: number; countIsTotal: boolean; fingerprint: string; releaseVersions: Set<string>; sampleUrls: string[]; sampleLogs: string[] }
     >();
 
     for (const error of allErrors) {
       const fp = computeFingerprint(error.message, error.stackLocation, error.httpStatus);
       const existing = errorsByFingerprint.get(fp);
       if (existing) {
-        existing.count++;
+        existing.count += error.count ?? 1;
         existing.releaseVersions.add(error.releaseVersion);
         if (existing.sampleUrls.length < maxSamples) {
           if (error.dashboardUrl) existing.sampleUrls.push(error.dashboardUrl);
@@ -124,7 +135,8 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
       } else {
         errorsByFingerprint.set(fp, {
           error,
-          count: 1,
+          count: error.count ?? 1,
+          countIsTotal: error.countIsTotal ?? false,
           fingerprint: fp,
           releaseVersions: new Set([error.releaseVersion]),
           sampleUrls: error.dashboardUrl ? [error.dashboardUrl] : [],
@@ -177,21 +189,21 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
 
         if (newVersions.length > 0 && known.github_issue_number) {
           console.log(`  Regression: ${fp.slice(0, 8)} on ${newVersions.join(", ")} (issue #${known.github_issue_number})`);
-          const comment = `\u26a0\ufe0f **Regression detected**\n\nThis error reappeared on ${formatVersions(newVersions, known.repo)} (${data.count} occurrences in the last ${windowHours} hours).\n\nEither the fix didn't address this case or there was a regression.${formatSampleLinks(data.sampleUrls)}${formatSampleLogs(data.sampleLogs)}`;
+          const comment = `\u26a0\ufe0f **Regression detected**\n\nThis error reappeared on ${formatVersions(newVersions, known.repo)} (${describeCount(data.count, data.countIsTotal, windowHours)}).\n\nEither the fix didn't address this case or there was a regression.${formatSampleLinks(data.sampleUrls)}${formatSampleLogs(data.sampleLogs)}`;
           await deps.github.reopenIssue(known.repo, known.github_issue_number);
           await deps.github.commentOnIssue(known.repo, known.github_issue_number, comment);
           issuesReopened++;
 
           const allVersions = [...knownVersions, ...newVersions];
           await deps.d1.execute(
-            "UPDATE errors SET github_issue_state = 'open', release_versions = ?, last_seen_at = ?, total_count = total_count + ?, window_count = ?, updated_at = ? WHERE fingerprint = ?",
-            [JSON.stringify(allVersions), now, data.count, data.count, now, fp]
+            "UPDATE errors SET github_issue_state = 'open', release_versions = ?, last_seen_at = ?, total_count = MAX(total_count + ?, ?), window_count = ?, updated_at = ? WHERE fingerprint = ?",
+            [JSON.stringify(allVersions), now, ...totalParams(data), data.count, now, fp]
           );
         } else {
           // Closed issue recurring on an already-known release — keep counts current
           await deps.d1.execute(
-            "UPDATE errors SET last_seen_at = ?, total_count = total_count + ?, window_count = ?, updated_at = ? WHERE fingerprint = ?",
-            [now, data.count, data.count, now, fp]
+            "UPDATE errors SET last_seen_at = ?, total_count = MAX(total_count + ?, ?), window_count = ?, updated_at = ? WHERE fingerprint = ?",
+            [now, ...totalParams(data), data.count, now, fp]
           );
         }
       } else if (known.github_issue_state === "open" && known.github_issue_number) {
@@ -200,18 +212,18 @@ export async function runMonitor(deps: MonitorDeps): Promise<void> {
 
         if (daysSinceComment >= deps.config.comment_cadence_days) {
           console.log(`  Weekly comment: ${fp.slice(0, 8)} (issue #${known.github_issue_number}, ${data.count} occurrences)`);
-          const comment = `\ud83d\udcca **Ongoing error report**\n\nThis error occurred ${data.count} times in the last ${windowHours} hours.\n\nRelease version(s): ${formatVersions(data.releaseVersions, known.repo)}${formatSampleLinks(data.sampleUrls)}${formatSampleLogs(data.sampleLogs)}`;
+          const comment = `\ud83d\udcca **Ongoing error report**\n\nThis error occurred ${describeCount(data.count, data.countIsTotal, windowHours)}.\n\nRelease version(s): ${formatVersions(data.releaseVersions, known.repo)}${formatSampleLinks(data.sampleUrls)}${formatSampleLogs(data.sampleLogs)}`;
           await deps.github.commentOnIssue(known.repo, known.github_issue_number, comment);
           issuesCommented++;
 
           await deps.d1.execute(
-            "UPDATE errors SET last_commented_at = ?, last_seen_at = ?, total_count = total_count + ?, window_count = ?, updated_at = ? WHERE fingerprint = ?",
-            [now, now, data.count, data.count, now, fp]
+            "UPDATE errors SET last_commented_at = ?, last_seen_at = ?, total_count = MAX(total_count + ?, ?), window_count = ?, updated_at = ? WHERE fingerprint = ?",
+            [now, now, ...totalParams(data), data.count, now, fp]
           );
         } else {
           await deps.d1.execute(
-            "UPDATE errors SET last_seen_at = ?, total_count = total_count + ?, window_count = ?, updated_at = ? WHERE fingerprint = ?",
-            [now, data.count, data.count, now, fp]
+            "UPDATE errors SET last_seen_at = ?, total_count = MAX(total_count + ?, ?), window_count = ?, updated_at = ? WHERE fingerprint = ?",
+            [now, ...totalParams(data), data.count, now, fp]
           );
         }
       }
@@ -328,6 +340,7 @@ async function main() {
     accountId: requireEnv("CLOUDFLARE_ACCOUNT_ID"),
     scriptName: cfRepo?.cloudflare_script_name ?? "",
     dashboardUrl: cfRepo?.dashboard_url,
+    issuesSince: cfRepo?.cloudflare_issues_since,
   });
 
   const classifier = new ErrorClassifier({

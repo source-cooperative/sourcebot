@@ -7,12 +7,16 @@ export interface RepoConfig {
   log_source: "vercel" | "cloudflare_workers";
   vercel_project_id?: string;
   cloudflare_script_name?: string;
+  /** Workers Issues groups first seen before this ISO date are not filed. */
+  cloudflare_issues_since?: string;
   dashboard_url?: string;
   auto_fix: boolean;
 }
 
 export interface Config {
   repos: RepoConfig[];
+  /** Weekly observability digest posted to Slack (src/digest.ts). */
+  digest?: { repo: string; script_name: string; analytics_dataset: string; days: number };
   schedule: string;
   comment_cadence_days: number;
   anthropic_model: string;
