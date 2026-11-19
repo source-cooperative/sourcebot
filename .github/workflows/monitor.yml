@@ -10,6 +10,10 @@ on:
         required: false
         type: number
 
+permissions:
+  contents: read
+  actions: write # keepalive below
+
 jobs:
   monitor:
     runs-on: ubuntu-latest
@@ -41,3 +45,14 @@ jobs:
           SC_DEV_BOT_PRIVATE_KEY: ${{ secrets.SC_DEV_BOT_PRIVATE_KEY }}
           SC_DEV_BOT_INSTALLATION_ID: ${{ vars.SC_DEV_BOT_INSTALLATION_ID }}
           WINDOW_HOURS: ${{ inputs.window_hours }}
+
+      # GitHub disables scheduled workflows after 60 days without repository
+      # activity (that stopped this monitor on 2026-10-10). Re-enabling them from
+      # a scheduled run keeps them on.
+      - name: Keep scheduled workflows enabled
+        if: always()
+        run: |
+          gh workflow enable monitor.yml -R "$GITHUB_REPOSITORY"
+          gh workflow enable digest.yml -R "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}

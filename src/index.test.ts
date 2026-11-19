@@ -125,4 +125,21 @@ describe("runMonitor", () => {
     await runMonitor(mockDeps);
     expect(mockDeps.github.commentOnIssue).toHaveBeenCalled();
   });
+
+  it("reports a running total from Cloudflare Issues as a total, and raises total_count to it", async () => {
+    const fp = computeFingerprint("HttpServerError · HTTP 520", null, 520);
+    (mockDeps.cloudflareSource.fetchErrors as any).mockResolvedValueOnce([
+      { message: "HttpServerError · HTTP 520", stackLocation: null, httpStatus: 520, source: "source-cooperative/data.source.coop", releaseVersion: "unknown", timestamp: Date.now(), dashboardUrl: null, rawLog: null, count: 9754, countIsTotal: true },
+    ]);
+    (mockDeps.d1.query as any).mockResolvedValueOnce([
+      { fingerprint: fp, repo: "source-cooperative/data.source.coop", github_issue_number: 7, github_issue_state: "open", release_versions: '["unknown"]', last_commented_at: null },
+    ]);
+
+    await runMonitor(mockDeps);
+    const comment = (mockDeps.github.commentOnIssue as any).mock.calls[0][2] as string;
+    expect(comment).toContain("9754 times in total");
+    const update = (mockDeps.d1.execute as any).mock.calls.find((c: any[]) => String(c[0]).startsWith("UPDATE errors"));
+    expect(update[0]).toContain("total_count = MAX(total_count + ?, ?)");
+    expect(update[1].slice(2, 4)).toEqual([0, 9754]);
+  });
 });

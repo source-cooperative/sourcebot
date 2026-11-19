@@ -7,11 +7,23 @@ repos:
 
   - name: source-cooperative/data.source.coop
     log_source: cloudflare_workers
-    cloudflare_script_name: data-source-coop
+    cloudflare_script_name: source-data-proxy
+    # Workers Issues groups that already existed when sourcebot started reading
+    # Issues are tracked by hand (e.g. data.source.coop#206, #281); only file new ones.
+    cloudflare_issues_since: "2026-11-19T00:00:00Z"
     dashboard_url: https://dash.cloudflare.com/1335bb5b87a1c2e1de2ca03408c23b71/workers/services/view/source-data-proxy/production/observability/invocations
-    auto_fix: true
+    # Most proxy error groups are infrastructure (Cloudflare 52x, backend STS),
+    # not code a bot can fix; a human assigns Scooter when one is.
+    auto_fix: false
 
 schedule: "0 */6 * * *"
 window_hours: 6
 comment_cadence_days: 7
 anthropic_model: claude-sonnet-4-6
+
+# Weekly digest of the data proxy's observability, posted to Slack (src/digest.ts).
+digest:
+  repo: source-cooperative/data.source.coop
+  script_name: source-data-proxy
+  analytics_dataset: source_data_proxy_production
+  days: 7
